@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MF Grid — mfdata.in</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 16px; }
+    h1 { font-size: 20px; margin-bottom: 4px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+    .filter { display: flex; flex-direction: column; font-size: 12px; }
+    .filter label { margin-bottom: 2px; color: #555; }
+    .filter input, .filter select { padding: 4px 6px; font-size: 13px; min-width: 120px; }
+    .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+    button { padding: 4px 8px; font-size: 12px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; }
+    th { background: #f5f5f5; position: sticky; top: 0; z-index: 1; }
+    .status { font-size: 12px; color: #666; margin-bottom: 4px; }
+    .pagination { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; }
+    .pagination button[disabled] { opacity: 0.5; cursor: default; }
+  </style>
+</head>
+<body>
+  <h1>Mutual Fund Grid</h1>
+  <div class="status" id="status">
+    Data source: mfdata.in | Filters run server-side | Cached in browser
+  </div>
+
+  <div class="filters">
+    <div class="filter">
+      abel for="search">Search scheme name or AMFI code</label>
+      <input id="search" type="text" placeholder="e.g. Mirae Flexi Cap or 119551">
+    </div>
+
+    <div class="filter">
+      abel for="plan">Plan</label>
+      <select id="plan">
+        <option value="All">All plans</option>
+        <option value="Regular">Regular</option>
+        <option value="Direct">Direct</option>
+      </select>
+    </div>
+
+    <div class="filter">
+      abel for="option">Option</label>
+      <select id="option">
+        <option value="All">All options</option>
+        <option value="Growth">Growth</option>
+        <option value="Dividend / IDCW">Dividend / IDCW</option>
+      </select>
+    </div>
+
+    <div class="filter">
+      abel for="amc">AMC / Fund house</label>
+      <select id="amc">
+        <option value="All">All AMCs</option>
+      </select>
+    </div>
+
+    <div class="filter">
+      abel for="category">Scheme category</label>
+      <select id="category">
+        <option value="All">All categories</option>
+      </select>
+    </div>
+
+    <div class="filter">
+      abel for="risk">Risk label</label>
+      <select id="risk">
+        <option value="All">All risk levels</option>
+        <option value="Low">Low</option>
+        <option value="Moderately Low">Moderately Low</option>
+        <option value="Moderate">Moderate</option>
+        <option value="Moderately High">Moderately High</option>
+        <option value="High">High</option>
+        <option value="Very High">Very High</option>
+      </select>
+    </div>
+
+    <div class="filter">
+      abel for="minNav">Min NAV (₹)</label>
+      <input id="minNav" type="number" placeholder="e.g. 10">
+    </div>
+
+    <div class="filter">
+      abel for="maxNav">Max NAV (₹)</label>
+      <input id="maxNav" type="number" placeholder="e.g. 2000">
+    </div>
+
+    <div class="filter">
+      abel for="minAum">Min AUM (₹ Cr)</label>
+      <input id="minAum" type="number" placeholder="e.g. 500">
+    </div>
+
+    <div class="filter">
+      abel for="maxExp">Max Expense Ratio (%)</label>
+      <input id="maxExp" type="number" placeholder="e.g. 2.5">
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button id="reset">Reset filters</button>
+    <button id="refresh">Refresh</button>
+    <span id="summary"></span>
+  </div>
+
+  <div style="overflow:auto; max-height: 70vh;">
+    <table>
+      <thead>
+        <tr>
+          <th>AMFI Code</th>
+          <th>Scheme Name</th>
+          <th>Plan</th>
+          <th>Option</th>
+          <th>AMC</th>
+          <th>Category</th>
+          <th>Risk</th>
+          <th>NAV</th>
+          <th>AUM (₹ Cr)</th>
+          <th>Expense (%)</th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <tr><td colspan="10">Initialising…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <button id="prevPage">Prev</button>
+    <button id="nextPage">Next</button>
+    <span id="pageInfo"></span>
+    <select id="pageSize">
+      <option value="25">25 / page</option>
+      <option value="50" selected>50 / page</option>
+      <option value="100">100 / page</option>
+    </select>
+  </div>
+
+  <script>
+    const API_URL = "/api/mf-schemes";
+    const CACHE_TTL_MS = 48 * 60 * 60 * 1000;
+    const cache = new Map();
+
+    let currentPage = 1;
+    let currentPageSize = 50;
+    let lastFiltersKey = "";
+
+    const statusEl = document.getElementById("status");
+    const rowsEl = document.getElementById("rows");
+    const summaryEl = document.getElementById("summary");
+    const pageInfoEl = document.getElementById("pageInfo");
+    const pageSizeEl = document.getElementById("pageSize");
+    const prevPageEl = document.getElementById("prevPage");
+    const nextPageEl = document.getElementById("nextPage");
+
+    const filterEls = {
+      search: document.getElementById("search"),
+      plan: document.getElementById("plan"),
+      option: document.getElementById("option"),
+      amc: document.getElementById("amc"),
+      category: document.getElementById("category"),
+      risk: document.getElementById("risk"),
+      minNav: document.getElementById("minNav"),
+      maxNav: document.getElementById("maxNav"),
+      minAum: document.getElementById("minAum"),
+      maxExp: document.getElementById("maxExp")
+    };
+
+    function getFilters() {
+      return {
+        search: filterEls.search.value.trim(),
+        plan: filterEls.plan.value,
+        option: filterEls.option.value,
+        amc: filterEls.amc.value,
+        category: filterEls.category.value,
+        risk: filterEls.risk.value,
+        minNav: filterEls.minNav.value ? Number(filterEls.minNav.value) : undefined,
+        maxNav: filterEls.maxNav.value ? Number(filterEls.maxNav.value) : undefined,
+        minAum: filterEls.minAum.value ? Number(filterEls.minAum.value) : undefined,
+        maxExp: filterEls.maxExp.value ? Number(filterEls.maxExp.value) : undefined,
+        page: currentPage,
+        pageSize: currentPageSize
+      };
+    }
+
+    function makeKey(f) {
+      return JSON.stringify({
+        ...f,
+        search: (f.search || "").trim().toLowerCase()
+      });
+    }
+
+    async function fetchSchemes(filters, { forceRefresh = false } = {}) {
+      const key = makeKey(filters);
+      const now = Date.now();
+      const cached = cache.get(key);
+
+      if (cached && !forceRefresh && now - cached.fetchedAt < CACHE_TTL_MS) {
+        return cached;
+      }
+
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v === undefined || v === "" || v === "All") return;
+        params.set(k, String(v));
+      });
+
+      const url = API_URL + "?" + params.toString();
+      const startedAt = performance.now();
+      statusEl.textContent = "Loading from server…";
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+
+        const fetchedAt = Date.now();
+        const entry = {
+          rows: data.rows || [],
+          total: data.total || 0,
+          fetchedAt,
+          url
+        };
+        cache.set(key, entry);
+
+        const dur = (performance.now() - startedAt).toFixed(0);
+        statusEl.textContent = "Loaded " + entry.rows.length + " schemes in " + dur + " ms (cached for 48h).";
+        return entry;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Error loading data: " + err.message;
+        return { rows: [], total: 0, fetchedAt: now, url };
+      }
+    }
+
+    function renderTable(entry) {
+      if (!entry || !Array.isArray(entry.rows) || entry.rows.length === 0) {
+        rowsEl.innerHTML = "<tr><td colspan='10'>No schemes found for current filters.</td></tr>";
+        summaryEl.textContent = "";
+        return;
+      }
+
+      rowsEl.innerHTML = entry.rows.map(row => {
+        const amfi = row.amfi_code || row.code || "";
+        const name = row.scheme_name || row.name || "";
+        const plan = row.plan || "";
+        const option = row.option || "";
+        const amc = row.amc || row.fund_house || "";
+        const cat = row.category || "";
+        const risk = row.risk || "";
+        const nav = row.nav !== undefined ? Number(row.nav).toFixed(2) : "";
+        const aum = row.aum_cr !== undefined ? Number(row.aum_cr).toFixed(2) : "";
+        const exp = row.exp_ratio !== undefined ? Number(row.exp_ratio).toFixed(2) : "";
+
+        return "<tr>" +
+          "<td>" + amfi + "</td>" +
+          "<td>" + name + "</td>" +
+          "<td>" + plan + "</td>" +
+          "<td>" + option + "</td>" +
+          "<td>" + amc + "</td>" +
+          "<td>" + cat + "</td>" +
+          "<td>" + risk + "</td>" +
+          "<td>" + nav + "</td>" +
+          "<td>" + aum + "</td>" +
+          "<td>" + exp + "</td>" +
+        "</tr>";
+      }).join("");
+
+      const startIdx = (currentPage - 1) * currentPageSize + 1;
+      const endIdx = Math.min(startIdx + entry.rows.length - 1, entry.total);
+      summaryEl.textContent = "Showing " + startIdx + "–" + endIdx + " of " + entry.total + " schemes";
+    }
+
+    function updatePagination(entry) {
+      const total = entry ? entry.total : 0;
+      const totalPages = total ? Math.ceil(total / currentPageSize) : currentPage;
+      pageInfoEl.textContent = "Page " + currentPage + " of " + (totalPages || 1);
+
+      prevPageEl.disabled = currentPage <= 1;
+      nextPageEl.disabled = totalPages === 0 || currentPage >= totalPages;
+    }
+
+    let searchDebounce;
+    function scheduleReload() {
+      const filters = getFilters();
+      const key = makeKey(filters);
+      if (key !== lastFiltersKey) currentPage = 1;
+      lastFiltersKey = makeKey({ ...filters, page: currentPage, pageSize: currentPageSize });
+      loadData();
+    }
+
+    async function loadData({ forceRefresh = false } = {}) {
+      const filters = getFilters();
+      const entry = await fetchSchemes(filters, { forceRefresh });
+      renderTable(entry);
+      updatePagination(entry);
+    }
+
+    Object.values(filterEls).forEach(el => {
+      if (!el) return;
+      if (el.id === "search") {
+        el.addEventListener("input", () => {
+          clearTimeout(searchDebounce);
+          searchDebounce = setTimeout(() => scheduleReload(), 400);
+        });
+      } else {
+        el.addEventListener("change", () => scheduleReload());
+      }
+    });
+
+    pageSizeEl.addEventListener("change", () => {
+      currentPageSize = Number(pageSizeEl.value);
+      currentPage = 1;
+      scheduleReload();
+    });
+
+    prevPageEl.addEventListener("click", () => {
+      if (currentPage > 1) {
+        currentPage -= 1;
+        scheduleReload();
+      }
+    });
+
+    nextPageEl.addEventListener("click", () => {
+      currentPage += 1;
+      scheduleReload();
+    });
