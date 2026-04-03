@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "public/mf-grid.html", "use": "@vercel/static" },
+    { "src": "public/(.*)", "use": "@vercel/static" },
+    { "src": "api/mf-schemes.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/mf-grid", "dest": "/public/mf-grid.html" },
+    { "src": "/schemes.json", "dest": "/public/schemes.json" },
+    { "src": "/api/mf-schemes", "dest": "/api/mf-schemes.js" }
+  ]
+}
