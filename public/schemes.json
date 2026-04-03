@@ -1,0 +1,14 @@
+[
+  {
+    "amfi_code": "119551",
+    "scheme_name": "Mirae Asset Flexi Cap Fund Direct Growth",
+    "plan": "Direct",
+    "option": "Growth",
+    "amc": "Mirae Asset Mutual Fund",
+    "category": "Flexi Cap Fund",
+    "risk": "Very High",
+    "nav": 123.45,
+    "aum_cr": 1234.56,
+    "exp_ratio": 0.75
+  }
+]
