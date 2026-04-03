@@ -18,7 +18,7 @@ async function fetchFromAPI() {
     console.error('API fetch error:', err);
     throw err;
   }
-}}
+}
 
 // Load data with caching
 async function loadData() {
