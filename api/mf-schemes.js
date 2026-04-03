@@ -1,4 +1,3 @@
-
 // No requires needed - using built-in fetchlet cacheTimestamp = null;
 const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 
