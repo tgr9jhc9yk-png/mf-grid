@@ -2,12 +2,35 @@ const fs = require("fs");
 const path = require("path");
 
 let cachedData = null;
+let cacheTimestamp = null;
+const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 
-function loadData() {
-  if (cachedData) return cachedData;
-  const filePath = path.join(process.cwd(), "public", "schemes.json");
-  const raw = fs.readFileSync(filePath, "utf8");
-  cachedData = JSON.parse(raw);
+// Fetch data from mfdata.in API
+async function fetchFromAPI() {
+  const response = await fetch('https://api.mfapi.in/mf');
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+  const data = await response.json();
+  return data;
+}
+
+// Load data with caching
+async function loadData() {
+  const now = Date.now();
+  
+  // Return cached data if still valid
+  if (cachedData && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION) {
+    return cachedData;
+  }
+  
+  // Fetch fresh data from API
+  const data = await fetchFromAPI();
+  
+  // Update cache
+  cachedData = data;
+  cacheTimestamp = now;
+  
   return cachedData;
 }
 
@@ -15,54 +38,97 @@ module.exports = (req, res) => {
   // CORS headers for local dev
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  
   if (req.method === "OPTIONS") { res.status(200).end(); return; }
 
-  try {
-    const data = loadData();
+  (async () => {
+    try {
+      const data = await loadData();
 
-    const {
-      search = "",
-      plan = "All",
-      option = "All",
-      amc = "All",
-      category = "All",
-      risk = "All",
-      minNav,
-      maxNav,
-      minAum,
-      maxExp,
-      page = 1,
-      pageSize = 50
-    } = req.query;
+      const {
+        search = "",
+        plan = "All",
+        option = "All",
+        amc = "All",
+        category = "All",
+        risk = "All",
+        minNav,
+        maxNav,
+        minAum,
+        maxExp,
+        page = 1,
+        pageSize = 50
+      } = req.query;
 
-    const s = String(search).trim().toLowerCase();
+      const s = String(search).trim().toLowerCase();
 
-    let rows = data.filter(r => {
-      if (s) {
-        const hay = ((r.scheme_name || "") + " " + (r.amfi_code || "")).toLowerCase();
-        if (!hay.includes(s)) return false;
-      }
-      if (plan !== "All" && r.plan !== plan) return false;
-      if (option !== "All" && r.option !== option) return false;
-      if (amc !== "All" && r.amc !== amc) return false;
-      if (category !== "All" && r.category !== category) return false;
-      if (risk !== "All" && r.risk !== risk) return false;
-      if (minNav && !(Number(r.nav) >= Number(minNav))) return false;
-      if (maxNav && !(Number(r.nav) <= Number(maxNav))) return false;
-      if (minAum && !(Number(r.aum_cr) >= Number(minAum))) return false;
-      if (maxExp && !(Number(r.exp_ratio) <= Number(maxExp))) return false;
-      return true;
-    });
+      let rows = data.filter(r => {
+        if (s) {
+          const code = String(r.schemeCode || "").toLowerCase();
+          const name = String(r.schemeName || "").toLowerCase();
+          if (!code.includes(s) && !name.includes(s)) return false;
+        }
+        
+        // Extract plan, option, amc from schemeName
+        const schemeName = String(r.schemeName || "");
+        
+        // Plan filtering (Growth/Dividend/IDCW)
+        if (plan !== "All") {
+          const planLower = plan.toLowerCase();
+          const nameLower = schemeName.toLowerCase();
+          if (planLower === "growth" && !nameLower.includes("growth")) return false;
+          if (planLower === "dividend" && !nameLower.includes("dividend") && !nameLower.includes("idcw")) return false;
+          if (planLower === "idcw" && !nameLower.includes("idcw")) return false;
+        }
+        
+        // Option filtering (Direct/Regular)
+        if (option !== "All") {
+          const optionLower = option.toLowerCase();
+          const nameLower = schemeName.toLowerCase();
+          if (optionLower === "direct" && !nameLower.includes("direct")) return false;
+          if (optionLower === "regular" && nameLower.includes("direct")) return false;
+        }
+        
+        // AMC filtering (extract from scheme name - first few words)
+        if (amc !== "All") {
+          const nameLower = schemeName.toLowerCase();
+          const amcLower = amc.toLowerCase();
+          if (!nameLower.includes(amcLower)) return false;
+        }
+        
+        // Category filtering
+        if (category !== "All") {
+          const nameLower = schemeName.toLowerCase();
+          const catLower = category.toLowerCase();
+          // Common categories
+          if (catLower.includes("equity") && !nameLower.includes("equity")) return false;
+          if (catLower.includes("debt") && !nameLower.includes("debt") && !nameLower.includes("bond")) return false;
+          if (catLower.includes("hybrid") && !nameLower.includes("hybrid")) return false;
+          if (catLower.includes("liquid") && !nameLower.includes("liquid")) return false;
+        }
+        
+        return true;
+      });
 
-    const total = rows.length;
-    const p = Number(page) || 1;
-    const ps = Math.min(Number(pageSize) || 50, 200);
-    const start = (p - 1) * ps;
-    const pageRows = rows.slice(start, start + ps);
+      // Pagination
+      const pg = Math.max(1, parseInt(page));
+      const sz = Math.max(1, parseInt(pageSize));
+      const start = (pg - 1) * sz;
+      const end = start + sz;
 
-    res.status(200).json({ rows: pageRows, total });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error", detail: err.message });
-  }
+      const total = rows.length;
+      const paged = rows.slice(start, end);
+
+      res.json({
+        data: paged,
+        total,
+        page: pg,
+        pageSize: sz,
+        totalPages: Math.ceil(total / sz)
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to load schemes", message: err.message });
+    }
+  })();
 };
