@@ -9,8 +9,7 @@ const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 // Fetch data from mfdata.in API using https module
 function fetchFromAPI() {
   return new Promise((resolve, reject) => {
-    https.get('https://mfdata.in/api/v1/schemes', (res) => {
-      let data = '';
+    https.get(new URL('https://mfdata.in/api/v1/schemes'), (res) => {      let data = '';
       
       res.on('data', (chunk) => {
         data += chunk;
