@@ -140,9 +140,9 @@
 
   <script>
     const API_URL = "/api/mf-schemes";
+    const FILTER_OPTIONS_URL = "/api/filter-options";
     const CACHE_TTL_MS = 48 * 60 * 60 * 1000;
     const cache = new Map();
-
     let currentPage = 1;
     let currentPageSize = 50;
     let lastFiltersKey = "";
@@ -167,6 +167,36 @@
       minAum: document.getElementById("minAum"),
       maxExp: document.getElementById("maxExp")
     };
+
+    // Populate AMC and Category dropdowns
+    async function populateFilterOptions() {
+      try {
+        const res = await fetch(FILTER_OPTIONS_URL);
+        if (!res.ok) throw new Error("Failed to load filter options");
+        const { amcs, categories } = await res.json();
+        
+        // Populate AMC dropdown
+        const amcSelect = filterEls.amc;
+        amcs.forEach(amc => {
+          const option = document.createElement("option");
+          option.value = amc;
+          option.textContent = amc;
+          amcSelect.appendChild(option);
+        });
+        
+        // Populate Category dropdown
+        const categorySelect = filterEls.category;
+        categories.forEach(cat => {
+          const option = document.createElement("option");
+          option.value = cat;
+          option.textContent = cat;
+          categorySelect.appendChild(option);
+        });
+      } catch (err) {
+        console.error("Error loading filter options:", err);
+        statusEl.textContent = "Warning: Filter options not loaded";
+      }
+    }
 
     function getFilters() {
       return {
@@ -210,20 +240,21 @@
       const url = API_URL + "?" + params.toString();
       const startedAt = performance.now();
       statusEl.textContent = "Loading from server…";
+
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
-
         const fetchedAt = Date.now();
+
         const entry = {
           rows: data.rows || [],
           total: data.total || 0,
           fetchedAt,
           url
         };
-        cache.set(key, entry);
 
+        cache.set(key, entry);
         const dur = (performance.now() - startedAt).toFixed(0);
         statusEl.textContent = "Loaded " + entry.rows.length + " schemes in " + dur + " ms (cached for 48h).";
         return entry;
@@ -256,100 +287,4 @@
         return "<tr>" +
           "<td>" + amfi + "</td>" +
           "<td>" + name + "</td>" +
-          "<td>" + plan + "</td>" +
-          "<td>" + option + "</td>" +
-          "<td>" + amc + "</td>" +
-          "<td>" + cat + "</td>" +
-          "<td>" + risk + "</td>" +
-          "<td>" + nav + "</td>" +
-          "<td>" + aum + "</td>" +
-          "<td>" + exp + "</td>" +
-        "</tr>";
-      }).join("");
-
-      const startIdx = (currentPage - 1) * currentPageSize + 1;
-      const endIdx = Math.min(startIdx + entry.rows.length - 1, entry.total);
-      summaryEl.textContent = "Showing " + startIdx + "–" + endIdx + " of " + entry.total + " schemes";
-    }
-
-    function updatePagination(entry) {
-      const total = entry ? entry.total : 0;
-      const totalPages = total ? Math.ceil(total / currentPageSize) : currentPage;
-      pageInfoEl.textContent = "Page " + currentPage + " of " + (totalPages || 1);
-
-      prevPageEl.disabled = currentPage <= 1;
-      nextPageEl.disabled = totalPages === 0 || currentPage >= totalPages;
-    }
-
-    let searchDebounce;
-    function scheduleReload() {
-      const filters = getFilters();
-      const key = makeKey(filters);
-      if (key !== lastFiltersKey) currentPage = 1;
-      lastFiltersKey = makeKey({ ...filters, page: currentPage, pageSize: currentPageSize });
-      loadData();
-    }
-
-    async function loadData({ forceRefresh = false } = {}) {
-      const filters = getFilters();
-      const entry = await fetchSchemes(filters, { forceRefresh });
-      renderTable(entry);
-      updatePagination(entry);
-    }
-
-    Object.values(filterEls).forEach(el => {
-      if (!el) return;
-      if (el.id === "search") {
-        el.addEventListener("input", () => {
-          clearTimeout(searchDebounce);
-          searchDebounce = setTimeout(() => scheduleReload(), 400);
-        });
-      } else {
-        el.addEventListener("change", () => scheduleReload());
-      }
-    });
-
-    pageSizeEl.addEventListener("change", () => {
-      currentPageSize = Number(pageSizeEl.value);
-      currentPage = 1;
-      scheduleReload();
-    });
-
-    prevPageEl.addEventListener("click", () => {
-      if (currentPage > 1) {
-        currentPage -= 1;
-        scheduleReload();
-      }
-    });
-
-    nextPageEl.addEventListener("click", () => {
-      currentPage += 1;
-      scheduleReload();
-    });
-    
-    document.getElementById("reset").addEventListener("click", () => {
-      filterEls.search.value = "";
-      filterEls.plan.value = "All";
-      filterEls.option.value = "All";
-      filterEls.amc.value = "All";
-      filterEls.category.value = "All";
-      filterEls.risk.value = "All";
-      filterEls.minNav.value = "";
-      filterEls.maxNav.value = "";
-      filterEls.minAum.value = "";
-      filterEls.maxExp.value = "";
-      currentPage = 1;
-      scheduleReload();
-    });
-
-    document.getElementById("refresh").addEventListener("click", () => {
-      loadData({ forceRefresh: true });
-    });
-
-    (function init() {
-      statusEl.textContent = "Initialising… loading from server on demand (no full dump).";
-      scheduleReload();
-    })();
-  </script>
-</body>
-</html>
+          "<td>" + plan + "</td
