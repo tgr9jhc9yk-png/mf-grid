@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/mf-grid",
-      "destination": "/public/mf-grid.html"
+            "destination": "/mf-grid.html"
     },
     {
       "source": "/api/mf-schemes",
