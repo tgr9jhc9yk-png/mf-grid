@@ -1,53 +1,41 @@
-// No requires needed - using built-in fetchlet cacheTimestamp = null;
 const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 
 // Cache variables
 let cachedData = null;
 let cacheTimestamp = null;
 
-// Fetch data from mfdata.in API using https module
-// Fetch data from mfdata.in API using fetch
+// Fetch all schemes from mfdata.in
 async function fetchFromAPI() {
   try {
     const url = 'https://mfdata.in/api/v1/schemes';
     const response = await fetch(url);
-    
     if (!response.ok) {
       throw new Error(`API returned ${response.status}`);
     }
-    
     const result = await response.json();
-    return result.data || result; // Extract .data array from response
+    // mfdata.in returns { data: [...] }
+    return Array.isArray(result) ? result : (result.data || []);
   } catch (err) {
     console.error('API fetch error:', err);
     throw err;
   }
 }
 
-// Load data with caching
+// Load data with server-side caching
 async function loadData() {
   const now = Date.now();
-  
-  // Return cached data if still valid
   if (cachedData && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION) {
     return cachedData;
   }
-  
-  // Fetch fresh data from API
   const data = await fetchFromAPI();
-  
-  // Update cache
   cachedData = data;
   cacheTimestamp = now;
-  
   return cachedData;
 }
 
 module.exports = (req, res) => {
-  // CORS headers for local dev
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  
   if (req.method === "OPTIONS") { res.status(200).end(); return; }
 
   (async () => {
@@ -72,50 +60,67 @@ module.exports = (req, res) => {
       const s = String(search).trim().toLowerCase();
 
       let rows = data.filter(r => {
+        // Search by name or amfi_code
         if (s) {
-          const code = String(r.schemeCode || "").toLowerCase();
-          const name = String(r.schemeName || "").toLowerCase();
+          const code = String(r.amfi_code || "").toLowerCase();
+          const name = String(r.name || "").toLowerCase();
           if (!code.includes(s) && !name.includes(s)) return false;
         }
-        
-        // Extract plan, option, amc from schemeName
-        const schemeName = String(r.schemeName || "");
-        
-        // Plan filtering (Growth/Dividend/IDCW)
+
+        // Plan filter: plan_type is "regular" or "direct" (lowercase)
         if (plan !== "All") {
-          const planLower = plan.toLowerCase();
-          const nameLower = schemeName.toLowerCase();
-          if (planLower === "growth" && !nameLower.includes("growth")) return false;
-          if (planLower === "dividend" && !nameLower.includes("dividend") && !nameLower.includes("idcw")) return false;
-          if (planLower === "idcw" && !nameLower.includes("idcw")) return false;
+          const pt = String(r.plan_type || "").toLowerCase();
+          if (pt !== plan.toLowerCase()) return false;
         }
-        
-        // Option filtering (Direct/Regular)
+
+        // Option filter: option_type is "growth" or "dividend" / "idcw" (lowercase)
         if (option !== "All") {
-          const optionLower = option.toLowerCase();
-          const nameLower = schemeName.toLowerCase();
-          if (optionLower === "direct" && !nameLower.includes("direct")) return false;
-          if (optionLower === "regular" && nameLower.includes("direct")) return false;
+          const ot = String(r.option_type || "").toLowerCase();
+          const optLower = option.toLowerCase();
+          if (optLower === "dividend / idcw") {
+            if (ot !== "dividend" && ot !== "idcw") return false;
+          } else {
+            if (ot !== optLower) return false;
+          }
         }
-        
-        // AMC filtering (extract from scheme name - first few words)
+
+        // AMC filter: amc_name field
         if (amc !== "All") {
-          const nameLower = schemeName.toLowerCase();
-          const amcLower = amc.toLowerCase();
-          if (!nameLower.includes(amcLower)) return false;
+          if (String(r.amc_name || "") !== amc) return false;
         }
-        
-        // Category filtering
+
+        // Category filter: category field
         if (category !== "All") {
-          const nameLower = schemeName.toLowerCase();
-          const catLower = category.toLowerCase();
-          // Common categories
-          if (catLower.includes("equity") && !nameLower.includes("equity")) return false;
-          if (catLower.includes("debt") && !nameLower.includes("debt") && !nameLower.includes("bond")) return false;
-          if (catLower.includes("hybrid") && !nameLower.includes("hybrid")) return false;
-          if (catLower.includes("liquid") && !nameLower.includes("liquid")) return false;
+          if (String(r.category || "") !== category) return false;
         }
-        
+
+        // Risk filter: risk_label field
+        if (risk !== "All") {
+          if (String(r.risk_label || "") !== risk) return false;
+        }
+
+        // NAV range
+        if (minNav !== undefined && minNav !== "") {
+          const nav = parseFloat(r.nav);
+          if (isNaN(nav) || nav < parseFloat(minNav)) return false;
+        }
+        if (maxNav !== undefined && maxNav !== "") {
+          const nav = parseFloat(r.nav);
+          if (isNaN(nav) || nav > parseFloat(maxNav)) return false;
+        }
+
+        // AUM filter
+        if (minAum !== undefined && minAum !== "") {
+          const aum = parseFloat(r.aum);
+          if (isNaN(aum) || aum < parseFloat(minAum)) return false;
+        }
+
+        // Expense ratio filter
+        if (maxExp !== undefined && maxExp !== "") {
+          const exp = parseFloat(r.expense_ratio);
+          if (isNaN(exp) || exp > parseFloat(maxExp)) return false;
+        }
+
         return true;
       });
 
@@ -123,13 +128,11 @@ module.exports = (req, res) => {
       const pg = Math.max(1, parseInt(page));
       const sz = Math.max(1, parseInt(pageSize));
       const start = (pg - 1) * sz;
-      const end = start + sz;
-
       const total = rows.length;
-      const paged = rows.slice(start, end);
+      const paged = rows.slice(start, start + sz);
 
       res.json({
-        data: paged,
+        rows: paged,
         total,
         page: pg,
         pageSize: sz,
