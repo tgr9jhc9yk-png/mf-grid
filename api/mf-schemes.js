@@ -1,33 +1,25 @@
-const https = require('https');
-const fs = require("fs");
-const path = require("path");
 
-let cachedData = null;
-let cacheTimestamp = null;
+// No requires needed - using built-in fetchlet cacheTimestamp = null;
 const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 
 // Fetch data from mfdata.in API using https module
-function fetchFromAPI() {
-  return new Promise((resolve, reject) => {
-    https.get(new URL('https://mfdata.in/api/v1/schemes'), (res) => {      let data = '';
-      
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-resolve(parsed.data || parsed); // Extract .data array from response
-        } catch (err) {
-          reject(new Error('Failed to parse JSON: ' + err.message));
-        }
-      });
-    }).on('error', (err) => {
-      reject(new Error('API request failed: ' + err.message));
-    });
-  });
-}
+// Fetch data from mfdata.in API using fetch
+async function fetchFromAPI() {
+  try {
+    const url = 'https://mfdata.in/api/v1/schemes';
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+    
+    const result = await response.json();
+    return result.data || result; // Extract .data array from response
+  } catch (err) {
+    console.error('API fetch error:', err);
+    throw err;
+  }
+}}
 
 // Load data with caching
 async function loadData() {
