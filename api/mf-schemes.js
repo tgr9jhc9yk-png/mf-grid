@@ -9,7 +9,7 @@ const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 // Fetch data from mfdata.in API using https module
 function fetchFromAPI() {
   return new Promise((resolve, reject) => {
-    https.get('https://api.mfapi.in/mf', (res) => {
+    https.get('https://mfdata.in/api/v1/schemes', (res) => {
       let data = '';
       
       res.on('data', (chunk) => {
@@ -19,7 +19,7 @@ function fetchFromAPI() {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve(parsed);
+resolve(parsed.data || parsed); // Extract .data array from response
         } catch (err) {
           reject(new Error('Failed to parse JSON: ' + err.message));
         }
