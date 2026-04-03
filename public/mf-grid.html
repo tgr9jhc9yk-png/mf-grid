@@ -326,3 +326,30 @@
       currentPage += 1;
       scheduleReload();
     });
+    
+    document.getElementById("reset").addEventListener("click", () => {
+      filterEls.search.value = "";
+      filterEls.plan.value = "All";
+      filterEls.option.value = "All";
+      filterEls.amc.value = "All";
+      filterEls.category.value = "All";
+      filterEls.risk.value = "All";
+      filterEls.minNav.value = "";
+      filterEls.maxNav.value = "";
+      filterEls.minAum.value = "";
+      filterEls.maxExp.value = "";
+      currentPage = 1;
+      scheduleReload();
+    });
+
+    document.getElementById("refresh").addEventListener("click", () => {
+      loadData({ forceRefresh: true });
+    });
+
+    (function init() {
+      statusEl.textContent = "Initialising… loading from server on demand (no full dump).";
+      scheduleReload();
+    })();
+  </script>
+</body>
+</html>
