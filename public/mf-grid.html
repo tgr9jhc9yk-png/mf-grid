@@ -287,4 +287,100 @@
         return "<tr>" +
           "<td>" + amfi + "</td>" +
           "<td>" + name + "</td>" +
-          "<td>" + plan + "</td
+          "<td>" + plan + "</td" +
+          "<td>" + option + "</td>" +
+          "<td>" + amc + "</td>" +
+          "<td>" + cat + "</td>" +
+          "<td>" + risk + "</td>" +
+          "<td>" + nav + "</td>" +
+          "<td>" + aum + "</td>" +
+          "<td>" + exp + "</td>" +
+          "</tr>";
+      }).join("");
+
+      const startIdx = (currentPage - 1) * currentPageSize + 1;
+      const endIdx = Math.min(startIdx + entry.rows.length - 1, entry.total);
+      summaryEl.textContent = "Showing " + startIdx + "–" + endIdx + " of " + entry.total + " schemes";
+    }
+
+    function updatePagination(entry) {
+      const total = entry ? entry.total : 0;
+      const totalPages = total ? Math.ceil(total / currentPageSize) : currentPage;
+      pageInfoEl.textContent = "Page " + currentPage + " of " + (totalPages || 1);
+      prevPageEl.disabled = currentPage <= 1;
+      nextPageEl.disabled = totalPages === 0 || currentPage >= totalPages;
+    }
+
+    let searchDebounce;
+    function scheduleReload() {
+      const filters = getFilters();
+      const key = makeKey(filters);
+      if (key !== lastFiltersKey) currentPage = 1;
+      lastFiltersKey = makeKey({ ...filters, page: currentPage, pageSize: currentPageSize });
+      loadData();
+    }
+
+    async function loadData({ forceRefresh = false } = {}) {
+      const filters = getFilters();
+      const entry = await fetchSchemes(filters, { forceRefresh });
+      renderTable(entry);
+      updatePagination(entry);
+    }
+
+    Object.values(filterEls).forEach(el => {
+      if (!el) return;
+      if (el.id === "search") {
+        el.addEventListener("input", () => {
+          clearTimeout(searchDebounce);
+          searchDebounce = setTimeout(() => scheduleReload(), 400);
+        });
+      } else {
+        el.addEventListener("change", () => scheduleReload());
+      }
+    });
+
+    pageSizeEl.addEventListener("change", () => {
+      currentPageSize = Number(pageSizeEl.value);
+      currentPage = 1;
+      scheduleReload();
+    });
+
+    prevPageEl.addEventListener("click", () => {
+      if (currentPage > 1) {
+        currentPage -= 1;
+        scheduleReload();
+      }
+    });
+
+    nextPageEl.addEventListener("click", () => {
+      currentPage += 1;
+      scheduleReload();
+    });
+
+    document.getElementById("reset").addEventListener("click", () => {
+      filterEls.search.value = "";
+      filterEls.plan.value = "All";
+      filterEls.option.value = "All";
+      filterEls.amc.value = "All";
+      filterEls.category.value = "All";
+      filterEls.risk.value = "All";
+      filterEls.minNav.value = "";
+      filterEls.maxNav.value = "";
+      filterEls.minAum.value = "";
+      filterEls.maxExp.value = "";
+      currentPage = 1;
+      scheduleReload();
+    });
+
+    document.getElementById("refresh").addEventListener("click", () => {
+      loadData({ forceRefresh: true });
+    });
+
+    (async function init() {
+      statusEl.textContent = "Initialising… loading from server on demand (no full dump).";
+      await populateFilterOptions();
+      scheduleReload();
+    })();
+  </script>
+</body>
+</html>
