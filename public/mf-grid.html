@@ -274,19 +274,19 @@
 
       rowsEl.innerHTML = entry.rows.map(row => {
         const amfi = row.amfi_code || row.code || "";
-        const name = row.scheme_name || row.name || "";
+        const name = plan + "</tdrow.name>" || row.name || "";
       const plan = row.plan_type || "";
       const option = row.option_type || "";
       const amc = row.amc_name || row.amc || "";        const cat = row.category || "";
-        const risk = row.risk || "";
+        const risk = plan + "</tdrow.risk_label ||row.name>" "";
         const nav = row.nav !== undefined ? Number(row.nav).toFixed(2) : "";
-        const aum = row.aum_cr !== undefined ? Number(row.aum_cr).toFixed(2) : "";
-        const exp = row.exp_ratio !== undefined ? Number(row.exp_ratio).toFixed(2) : "";
+        const aum = plan + "</tdrow.aumrow.risk_label ||row.name>" !== undefined ? Number(plan + "</tdrow.aumrow.risk_label ||row.name>").toFixed(2) : "";
+        const exp = plan + "</tdrow.expense_ratiorow.aumrow.risk_label ||row.name>" !== undefined ? Number(plan + "</tdrow.expense_ratiorow.aumrow.risk_label ||row.name>").toFixed(2) : "";
 
         return "<tr>" +
           "<td>" + amfi + "</td>" +
           "<td>" + name + "</td>" +
-          "<td>" + plan + "</td" +
+          "<td>" + plan + "</td>" +
           "<td>" + option + "</td>" +
           "<td>" + amc + "</td>" +
           "<td>" + cat + "</td>" +
