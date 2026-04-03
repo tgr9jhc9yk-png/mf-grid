@@ -275,10 +275,9 @@
       rowsEl.innerHTML = entry.rows.map(row => {
         const amfi = row.amfi_code || row.code || "";
         const name = row.scheme_name || row.name || "";
-        const plan = row.plan || "";
-        const option = row.option || "";
-        const amc = row.amc || row.fund_house || "";
-        const cat = row.category || "";
+      const plan = row.plan_type || "";
+      const option = row.option_type || "";
+      const amc = row.amc_name || row.amc || "";        const cat = row.category || "";
         const risk = row.risk || "";
         const nav = row.nav !== undefined ? Number(row.nav).toFixed(2) : "";
         const aum = row.aum_cr !== undefined ? Number(row.aum_cr).toFixed(2) : "";
