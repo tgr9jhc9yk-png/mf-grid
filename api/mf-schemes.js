@@ -1,3 +1,4 @@
+const https = require('https');
 const fs = require("fs");
 const path = require("path");
 
@@ -5,14 +6,28 @@ let cachedData = null;
 let cacheTimestamp = null;
 const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 
-// Fetch data from mfdata.in API
-async function fetchFromAPI() {
-  const response = await fetch('https://api.mfapi.in/mf');
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
-  }
-  const data = await response.json();
-  return data;
+// Fetch data from mfdata.in API using https module
+function fetchFromAPI() {
+  return new Promise((resolve, reject) => {
+    https.get('https://api.mfapi.in/mf', (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed);
+        } catch (err) {
+          reject(new Error('Failed to parse JSON: ' + err.message));
+        }
+      });
+    }).on('error', (err) => {
+      reject(new Error('API request failed: ' + err.message));
+    });
+  });
 }
 
 // Load data with caching
