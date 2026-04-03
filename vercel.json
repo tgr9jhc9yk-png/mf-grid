@@ -1,13 +1,16 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "public/mf-grid.html", "use": "@vercel/static" },
-    { "src": "public/(.*)", "use": "@vercel/static" },
-    { "src": "api/mf-schemes.js", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/mf-grid", "dest": "/public/mf-grid.html" },
-    { "src": "/schemes.json", "dest": "/public/schemes.json" },
-    { "src": "/api/mf-schemes", "dest": "/api/mf-schemes.js" }
+  "rewrites": [
+    {
+      "source": "/mf-grid",
+      "destination": "/public/mf-grid.html"
+    },
+    {
+      "source": "/api/mf-schemes",
+      "destination": "/api/mf-schemes.js"
+    },
+    {
+      "source": "/api/filter-options",
+      "destination": "/api/filter-options.js"
+    }
   ]
 }
