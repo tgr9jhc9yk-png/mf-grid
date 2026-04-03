@@ -1,6 +1,10 @@
 // No requires needed - using built-in fetchlet cacheTimestamp = null;
 const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 
+// Cache variables
+let cachedData = null;
+let cacheTimestamp = null;
+
 // Fetch data from mfdata.in API using https module
 // Fetch data from mfdata.in API using fetch
 async function fetchFromAPI() {
